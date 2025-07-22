@@ -1,0 +1,87 @@
+# Simple FreeCAD macro for importing points into a draft spline
+# Copyright (c) 2019-2025 Md Imam Hossain (emamhd@gmail.com)
+
+import csv
+import FreeCAD,Draft
+from PySide2 import QtWidgets, QtCore
+
+class SPoints():
+    def __init__(self):
+        self.coords = []
+
+class ImportPointsDialog(QtWidgets.QDialog):
+    def __init__(self, parent=None):
+        super(ImportPointsDialog, self).__init__(parent)
+        self.setWindowTitle("Importing points")
+        self.setupUI()
+
+    def setupUI(self):
+        layout = QtWidgets.QVBoxLayout()
+
+        file_group = QtWidgets.QHBoxLayout()
+        self.file_button = QtWidgets.QPushButton("Select file")
+        self.file_button.clicked.connect(self.select_file)
+        self.file_label = QtWidgets.QLineEdit()
+        self.file_label.setReadOnly(True)
+        file_group.addWidget(self.file_label)
+        file_group.addWidget(self.file_button)
+
+        unit_group = QtWidgets.QHBoxLayout()
+        unit_label = QtWidgets.QLabel("Unit:")
+        self.unit_combo = QtWidgets.QComboBox()
+        self.unit_combo.addItems(["mm", "cm", "m", "in", "ft"])
+        unit_group.addWidget(unit_label)
+        unit_group.addWidget(self.unit_combo)
+
+        self.import_button = QtWidgets.QPushButton("Import")
+        self.import_button.clicked.connect(self.on_import)
+
+        layout.addLayout(file_group)
+        layout.addLayout(unit_group)
+        layout.addWidget(self.import_button)
+
+        self.setLayout(layout)
+
+    def select_file(self):
+        file_path = QtWidgets.QFileDialog.getOpenFileName(self, "Select a CSV file containing points", "", "CSV files (*.csv)")[0]
+
+        if file_path:
+            self.file_label.setText(file_path)
+
+    def on_import(self):
+        file_path = self.file_label.text()
+        selected_unit = self.unit_combo.currentText()
+        spoints = SPoints()
+
+        if not file_path:
+            QtWidgets.QMessageBox.warning(self, "Warning", "Please select a CSV file first!")
+            return
+
+        FreeCAD.Console.PrintMessage(f"Importing from: {file_path}\n")
+        FreeCAD.Console.PrintMessage(f"Selected unit: {selected_unit}\n")
+
+        csv_file = open(file_path, 'r')
+        reader = csv.reader(csv_file)
+
+        for row in reader:
+            if selected_unit == 'mm':
+                spoints.coords.append(FreeCAD.Vector(float(row[0]), float(row[1]), float(row[2])))
+            elif selected_unit == 'cm':
+                spoints.coords.append(FreeCAD.Vector(float(row[0])*10, float(row[1])*10, float(row[2])*10))
+            elif selected_unit == 'm':
+                spoints.coords.append(FreeCAD.Vector(float(row[0])*1000, float(row[1])*1000, float(row[2])*1000))
+            elif selected_unit == 'in':
+                spoints.coords.append(FreeCAD.Vector(float(row[0])*25.4, float(row[1])*25.4, float(row[2])*25.4))
+            elif selected_unit == 'ft':
+                spoints.coords.append(FreeCAD.Vector(float(row[0])*304.8, float(row[1])*304.8, float(row[2])*304.8))
+
+        csv_file.close()
+
+        spline = Draft.makeBSpline(spoints.coords, closed=False, face=False)
+
+        # For now just show a success message
+        QtWidgets.QMessageBox.information(self, "Success", f"Points are imported and a spline is create from:\n{file_path}\nUsing unit: {selected_unit}")
+
+# Show the dialog
+dialog = ImportPointsDialog(FreeCAD.Gui.getMainWindow())
+dialog.exec_()
